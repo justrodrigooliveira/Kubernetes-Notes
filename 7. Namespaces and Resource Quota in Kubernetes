@@ -1,0 +1,211 @@
+Namespace provides an additional qualification to a resource name. This is helpful when multiple teams are using the same cluster and 
+there is a potential of name collision. It can be as a virtual wall between multiple clusters.
+
+Functionality of Namespace
+----------------------------------------------------------------------------------------
+Following are some of the important functionalities of a Namespace in Kubernetes −
+Namespaces help pod-to-pod communication using the same namespace.
+Namespaces are virtual clusters that can sit on top of the same physical cluster.
+They provide logical separation between the teams and their environments.
+=================================================================NAMESPACES=================================================================
+By default, a Kubernetes cluster is created with the following three namespaces:
+
+default: By default all the resource created in Kubernetes cluster are created in the default namespace. By default the default namespace can 
+        allow applications to run with unbounded CPU and memory requests/limits (Until someone set resource quota for the default namespace).
+kube-public: Namespace for resources that are publicly readable by all users. This namespace is generally reserved for cluster usage.
+kube-system: It is the Namespace for objects created by Kubernetes systems/control plane.
+============================================================================================================================================
+============================================================================================================================================
+
+$ kubectl create –f namespace.yml ---------> 1
+$ kubectl get namespace -----------------> 2
+$ kubectl get namespace <Namespace name> ------->3
+$ kubectl describe namespace <Namespace name> ---->4
+$ kubectl delete namespace <Namespace name>
+
+============================================================================================================================================
+============================================================================================================================================
+============================================================================================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+   name: dev
+   labels:
+     name: dev
+
+====================================================================================to create a pod========================================
+vi pod.yml
+
+kind: Pod                              
+apiVersion: v1                     
+metadata:                           
+  name: testpod                  
+spec:                                    
+  containers:                      
+    - name: c00                     
+      image: ubuntu              
+      command: ["/bin/bash", "-c", "while true; do echo Technical Guftgu; sleep 5 ; done"]
+  restartPolicy: Never       
+==============STEPS===================================================================================================================================
+1.  kubectl apply -f namespace.yml
+2.  kubectl apply -f pod.yml   #this will get created in default still BUT we need to deploy this into our name space "dev"
+3.  kubectl apply -f pod.yml -n dev
+4. kubectl get pods   # still it'll show default namespace pods which is still empty 
+5. kubectl get pods -n dev
+####Everytime its going to default so if we need to set dev as default namespace now on then
+6. kubectl config set-context $(kubectl config current-context) --namespace=dev
+### if want to check current name space
+7. kubectl config view | grep namespace:
+
+=================================================================================================================================================
+
+$ kubectl config set-context $(kubectl config current-context) --namespace=dev      #Redirect always to our current namespace eg:dev instead
+  of default
+$ kubectl config view | grep namespace:
+==============================================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resources
+spec:
+  containers:
+  - name: resource
+    image: centos
+    command: ["/bin/bash", "-c", "while true; do echo Technical-Guftgu; sleep 5 ; done"]
+    resources:                                          
+      requests:
+        memory: "64Mi"
+        cpu: "100m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+================================================================RESOURCEQUOTA==============================================================
+============================================================================================================================================
+1. A pod in kubernetes will run with no limits on Cpu and memory
+2. we can optionally spcify how much CPU and memory(RAM) each container needs.
+3. Schedular decides which nodes to place PODS only if the Node has enough cpu resource available to satisfy the POD cpu request.
+
+REQUEST 
+Amount of resource that the system will guarantee for the container and kubernetes willl use this value to decide on which node to place the POD
+LIMIT
+the max amount of resource that kubernetes will allow the controller to use. in casse the limit is not set for a container ,
+ it choose default which is 1
+
+cpu values specified in "multicpu" & memory in MiB
+
+
+DEFAULT RANGE
+cpu : min request = 0.5 ; max limit = 1
+memory : min request : 500m ; max limit= 1G 
+============================================================================================================================================
+============================================================================================================================================
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+   name: myquota
+spec:
+  hard:
+    limits.cpu: "400m"
+    limits.memory: "400Mi"
+    requests.cpu: "200m"
+    requests.memory: "200Mi"
+===========================================================
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: deployments
+spec:
+  replicas: 3
+  selector:      
+    matchLabels:
+     objtype: deployment
+  template:
+    metadata:
+      name: testpod8
+      labels:
+        objtype: deployment
+    spec:
+     containers:
+       - name: c00
+         image: ubuntu
+         command: ["/bin/bash", "-c", "while true; do echo Technical-Guftgu; sleep 5 ; done"]
+         resources:
+            requests:
+              cpu: "200m"
+============================================================
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-limit-range
+spec:
+  limits:
+  - default:
+      cpu: 1
+    defaultRequest:
+      cpu: 0.5
+    type: Container
+
+==============cpu2.yml======================================
+#mentioning limit but not request then it shoul be limit==request
+> kubectl describe pods default-cpu-demo-2
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-cpu-demo-2
+spec:
+  containers:
+  - name: default-cpu-demo-2-ctr
+    image: nginx
+    resources:
+      limits:
+        cpu: "1"
+=================================================================================================
+# If we mentioning request but not limit then limit will be choosen default like for cpu its 1.
+> kubectl describe pods default-cpu-demo-3
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-cpu-demo-3
+spec:
+  containers:
+  - name: default-cpu-demo-3-ctr
+    image: nginx
+    resources:
+      requests:
+        cpu: "0.75"
+===============================================================================================================================
+===================================================================== MEMDEFAULT.YML===========================================
+#limiting memory of container max upto 1GB and min 500Mi, less requirement in both cases will throw error.
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-min-max-demo-lr
+spec:
+  limits:
+  - max:
+      memory: 1Gi
+    min:
+      memory: 500Mi
+    type: Container
+==========
+apiVersion: v1
+kind: Pod
+metadata:
+  name: constraints-mem-demo
+spec:
+  containers:
+  - name: constraints-mem-demo-ctr
+    image: nginx
+    resources:
+      limits:
+        memory: "800Mi"
+      requests:
+        memory: "600Mi"
+
+
+- If request is not specified & limit is given, then request = limit
